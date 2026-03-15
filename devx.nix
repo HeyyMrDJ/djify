@@ -1,5 +1,13 @@
 { pkgs, lib }:
 let
+  djify-kind-load-image = pkgs.writeShellApplication {
+    name = "djify-kind-load-image";
+    runtimeInputs = [ pkgs.kind ];
+    text = ''
+      kind load docker-image djify:latest --name djify
+    '';
+    meta.description = "Loads the docker image in kind cluster";
+  };
   djify-kind-up = pkgs.writeShellApplication {
     name = "djify-kind-up";
     runtimeInputs = [ pkgs.kind ];
@@ -169,6 +177,7 @@ let
     djify-delete-sample
     djify-uninstall
     djify-docker-load
+    djify-kind-load-image
     djify-clean
   ];
 
