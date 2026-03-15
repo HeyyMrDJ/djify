@@ -1,0 +1,32 @@
+# k3s node registries configuration
+#
+# PURPOSE:
+#   Tells k3s's containerd runtime to pull images from the in-cluster
+#   registry over plain HTTP (no TLS). Without this, pods that reference
+#   images from registry.djify-system.svc.cluster.local:5000 will fail
+#   to pull with an "http: server gave HTTP response to HTTPS client" error.
+#
+# HOW TO APPLY:
+#   1. Copy this file to the k3s node:
+#        sudo cp config/k3s-registries.yaml /etc/rancher/k3s/registries.yaml
+#
+#   2. Restart k3s to pick up the change:
+#        sudo systemctl restart k3s
+#
+#   3. Verify k3s came back up:
+#        sudo systemctl status k3s
+#        kubectl get nodes
+#
+# NOTE: If your k3s node IS the machine you're running kubectl from,
+# you can run these commands directly. If it's a remote node, SSH in first.
+#
+# IMPORTANT: The endpoint must use the registry Service's ClusterIP, NOT the
+# DNS name. containerd runs outside in-cluster DNS so it cannot resolve
+# registry.djify-system.svc.cluster.local. Get the ClusterIP with:
+#   kubectl get svc registry -n djify-system -o jsonpath='{.spec.clusterIP}'
+# then substitute it below.
+#
+mirrors:
+  "registry.djify-system.svc.cluster.local:5000":
+    endpoint:
+      - "http://<REGISTRY_CLUSTER_IP>:5000"  # get with: kubectl get svc registry -n djify-system -o jsonpath='{.spec.clusterIP}'

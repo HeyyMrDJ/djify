@@ -1,0 +1,19 @@
+---
+# Sample App CR — points at a tiny public Python app with a Dockerfile.
+# Uses https://github.com/nginxinc/docker-nginx as a well-known public
+# repo that already has a Dockerfile, so the build works out of the box.
+#
+# To try with your own app instead, replace repoUrl, branch, and port.
+#
+apiVersion: djify.io/v1alpha1
+kind: App
+metadata:
+  name: sample-app
+  namespace: default
+spec:
+  repoUrl: https://github.com/dockersamples/node-bulletin-board
+  branch: master
+  dockerfilePath: bulletin-board-app/Dockerfile
+  port: 8080
+  replicas: 1
+  # ingressHost: sample-app.djify.local  # default — add to /etc/hosts to test

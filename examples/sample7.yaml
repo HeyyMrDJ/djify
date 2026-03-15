@@ -1,0 +1,16 @@
+---
+# sample-app3 — dockersamples/linux_tweet_app
+# Simple nginx app serving static HTML. No env vars required, works out of the box.
+apiVersion: djify.io/v1alpha1
+kind: App
+metadata:
+  name: sample-app6
+  namespace: default
+spec:
+  repoUrl: https://github.com/captainWaheed/docker-beginner
+  repoUrl: https://github.com/GoogleCloudPlatform/golang-samples
+  branch: main
+  dockerfilePath: Dockerfile
+  contextPath: "run/helloworld"
+  port: 8080 
+  replicas: 1

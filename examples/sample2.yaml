@@ -1,0 +1,16 @@
+---
+# sample-app2 — dockersamples/helloworld-demo-python
+# The Dockerfile lives at sample/Dockerfile but imports app.py from repo root,
+# so contextPath="" means "use repo root as build context".
+apiVersion: djify.io/v1alpha1
+kind: App
+metadata:
+  name: sample-app2
+  namespace: default
+spec:
+  repoUrl: https://github.com/dockersamples/helloworld-demo-python
+  branch: main
+  dockerfilePath: sample/Dockerfile
+  contextPath: ""
+  port: 8080
+  replicas: 1

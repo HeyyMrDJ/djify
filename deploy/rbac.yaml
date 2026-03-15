@@ -1,0 +1,75 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: djify-controller
+  namespace: djify-system
+  labels:
+    app.kubernetes.io/managed-by: djify
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: djify-controller
+  labels:
+    app.kubernetes.io/managed-by: djify
+rules:
+  # Watch and update App CRDs (including status subresource)
+  - apiGroups: ["djify.io"]
+    resources: ["apps"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["djify.io"]
+    resources: ["apps/status"]
+    verbs: ["get", "patch", "update"]
+
+  # Kopf internals: needs to read/write its own progress annotations
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+
+  # Build Jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs/status"]
+    verbs: ["get"]
+
+  # Pod logs (to surface build errors in App status)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+  # App workload resources (Deployment, Service, Ingress)
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: djify-controller
+  labels:
+    app.kubernetes.io/managed-by: djify
+subjects:
+  - kind: ServiceAccount
+    name: djify-controller
+    namespace: djify-system
+roleRef:
+  kind: ClusterRole
+  name: djify-controller
+  apiGroup: rbac.authorization.k8s.io
