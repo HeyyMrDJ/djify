@@ -11,28 +11,46 @@ KOPF           := $(VENV)/bin/kopf
 APP_NAMESPACE  := default
 
 .PHONY: help venv install-deps install-crd install-infra dev \
-        sample delete-sample uninstall clean
+        sample delete-sample uninstall clean kind-up kind-down install-ingress
 
 help:
 	@echo ""
 	@echo "djify — available targets"
 	@echo ""
+	@echo "  make kind-up         Create a 3-node kind cluster (1 control, 2 workers)"
+	@echo "  make kind-down       Delete the kind cluster"
+	@echo "  make install-ingress Install Ingress NGINX (for kind)"
 	@echo "  make venv            Create .venv with Python 3.12"
 	@echo "  make install-deps    Install Python dependencies into .venv"
-	@echo "  make install-crd     Apply the App CRD to k3s"
+	@echo "  make install-crd     Apply the App CRD to the cluster"
 	@echo "  make install-infra   Apply namespace, RBAC, registry, buildkitd"
 	@echo "  make dev             Run the controller locally (uses kubeconfig)"
 	@echo "  make sample          Apply examples/sample-app.yaml"
 	@echo "  make delete-sample   Delete examples/sample-app.yaml"
-	@echo "  make uninstall       Remove all djify resources from k3s"
+	@echo "  make uninstall       Remove all djify resources from the cluster"
 	@echo "  make clean           Remove .venv and __pycache__"
 	@echo ""
-	@echo "First-time setup:"
-	@echo "  1. make venv install-deps"
-	@echo "  2. make install-crd install-infra"
-	@echo "  3. Apply k3s registries config (see config/k3s-registries.yaml)"
-	@echo "  4. make dev"
+	@echo "First-time setup (with kind):"
+	@echo "  1. make kind-up install-ingress"
+	@echo "  2. make venv install-deps"
+	@echo "  3. make install-crd install-infra"
+	@echo "  4. Update config/k3s-registries.yaml and point to registry IP"
+	@echo "  5. make dev"
 	@echo ""
+
+kind-up:
+	kind create cluster --config kind-config.yaml --name djify
+
+kind-down:
+	kind delete cluster --name djify
+
+install-ingress:
+	kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+	@echo "Waiting for ingress-nginx to be ready..."
+	kubectl wait --namespace ingress-nginx \
+		--for=condition=ready pod \
+		--selector=app.kubernetes.io/component=controller \
+		--timeout=90s
 
 venv:
 	python3.12 -m venv $(VENV)

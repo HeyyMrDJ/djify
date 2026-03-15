@@ -19,13 +19,105 @@ Updating `spec` on the `App` CR triggers a rebuild and redeploy automatically.
 
 ## Prerequisites
 
-- [k3s](https://k3s.io) cluster (Traefik ingress controller included by default)
+- [k3s](https://k3s.io) or [kind](https://kind.sigs.k8s.io) cluster
 - `kubectl` configured to talk to your cluster
-- Python 3.12
+- Nix (see below) — manages Python, uv, kubectl, kind, and all dev tooling
+
+---
+
+## Development environment
+
+The recommended way to work on djify is via the Nix dev shell. It gives every contributor an identical, fully reproducible environment with all tools pinned — no manual Python installs, no PATH fiddling.
+
+### 1. Install Nix
+
+Use the [Determinate Systems installer](https://determinate.systems/nix), which enables flakes out of the box:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
+```
+
+Follow the prompts, then open a new terminal (or source your shell profile) to pick up the `nix` command.
+
+### 2. Enter the dev shell
+
+From the repo root:
+
+```bash
+nix develop
+```
+
+Or run:
+
+```bash
+direnv allow
+```
+In case direnv is installed in the system
+
+This drops you into a shell with Python 3.12, uv, kubectl, and kind on `PATH`, plus all `djify-*` commands available directly. You'll see:
+
+```
+djify dev shell ready
+  Python : Python 3.12.x
+  uv     : uv x.x.x
+
+Run 'djify-help' to see available commands.
+```
+
+### 3. Available commands
+
+```
+djify dev shell — available commands
+
+  djify-kind-up          Create a kind cluster (djify)
+  djify-kind-down        Delete the kind cluster
+  djify-install-ingress  Install Ingress NGINX (for kind)
+  djify-sync             Install/sync Python dependencies (uv sync)
+  djify-install-crd      Apply the App CRD to the cluster
+  djify-install-infra    Apply namespace, RBAC, registry, buildkitd
+  djify-dev              Run the controller locally
+  djify-sample           Apply examples/sample-app.yaml
+  djify-delete-sample    Delete examples/sample-app.yaml
+  djify-uninstall        Remove all djify resources from the cluster
+  djify-docker-load      Build the Docker image and load it into the daemon
+  djify-clean            Remove .venv and __pycache__
+
+First-time setup (with kind):
+  1. djify-kind-up && djify-install-ingress
+  2. djify-sync
+  3. djify-install-crd && djify-install-infra
+  4. Update config/k3s-registries.yaml and point to registry IP
+  5. djify-dev
+```
+
+### direnv (optional)
+
+If you have [direnv](https://direnv.net) installed, a `.envrc` is already included in the repo. Just run:
+
+```bash
+direnv allow
+```
+
+The dev shell will activate automatically whenever you `cd` into the project — no need to run `nix develop` manually.
+
+### Nix build targets
+
+```bash
+nix build              # build the Python virtualenv derivation
+nix build .#dockerImage  # build the controller Docker image as a Nix derivation
+djify-docker-load      # build .#dockerImage and load it into the local Docker daemon
+```
 
 ---
 
 ## Setup
+
+### Local development with kind (optional)
+
+If you don't have k3s running, you can use `kind` to create a 3-node cluster:
+```bash
+make kind-up install-ingress
+```
 
 ### 1. Configure the in-cluster registry
 
@@ -229,8 +321,16 @@ This removes the Deployment, Service, Ingress, and any lingering build Jobs.
 │   ├── rbac.yaml
 │   ├── registry.yaml            # in-cluster registry:2
 │   └── buildkitd.yaml           # moby/buildkit
-└── examples/
-    └── sample-app.yaml
+├── examples/
+│   └── sample-app.yaml
+├── flake.nix                    # Nix flake: venv + Docker image outputs, imports dev shell
+├── flake.lock                   # pinned Nix input revisions (committed)
+├── shell.nix                    # Nix dev shell definition (imported by flake.nix)
+├── devx.nix                     # all djify-* dev scripts (writeShellApplication)
+├── default.nix                  # callPackage-compatible Docker image build
+├── pyproject.toml               # uv workspace root + dependency declarations
+├── uv.lock                      # pinned Python dependency tree (committed)
+└── .envrc                       # direnv entry point — runs `use flake` to activate the dev shell
 ```
 
 ---
@@ -239,6 +339,9 @@ This removes the Deployment, Service, Ingress, and any lingering build Jobs.
 
 | Target | Description |
 |---|---|
+| `make kind-up` | Create a 3-node kind cluster (1 control, 2 workers) |
+| `make kind-down` | Delete the kind cluster |
+| `make install-ingress` | Install Ingress NGINX (for kind) |
 | `make venv` | Create `.venv` with Python 3.12 |
 | `make install-deps` | Install Python dependencies into `.venv` |
 | `make install-crd` | Apply the App CRD to the cluster |
