@@ -31,3 +31,8 @@ htmlcov/
 kubeconfig
 *.kubeconfig
 secrets/
+
+# Nix
+result
+result-*
+.direnv/
