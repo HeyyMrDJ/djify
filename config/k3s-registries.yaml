@@ -29,4 +29,4 @@
 mirrors:
   "registry.djify-system.svc.cluster.local:5000":
     endpoint:
-      - "http://<REGISTRY_CLUSTER_IP>:5000"  # get with: kubectl get svc registry -n djify-system -o jsonpath='{.spec.clusterIP}'
+      - "http://10.96.112.244:5000"
