@@ -1,0 +1,85 @@
+{{define "title"}}{{.Name}} — djify{{end}}
+
+{{define "content"}}
+<a class="back-link" href="/">← All apps</a>
+
+<div class="page-header">
+  <h1>{{.Name}} <span class="phase phase-{{.Phase}}">{{if .Phase}}{{.Phase}}{{else}}—{{end}}</span></h1>
+</div>
+
+<div class="detail-card">
+  <h2>Status</h2>
+  <div class="detail-grid">
+    <div class="detail-row">
+      <div class="detail-label">Phase</div>
+      <div class="detail-value"><span class="phase phase-{{.Phase}}">{{if .Phase}}{{.Phase}}{{else}}—{{end}}</span></div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Image</div>
+      <div class="detail-value mono">{{if .Image}}{{.Image}}{{else}}—{{end}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Message</div>
+      <div class="detail-value">{{if .Message}}{{.Message}}{{else}}—{{end}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Last build</div>
+      <div class="detail-value">{{if .LastBuildTime}}{{.LastBuildTime}}{{else}}—{{end}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Age</div>
+      <div class="detail-value">{{.Age}}</div>
+    </div>
+  </div>
+</div>
+
+<div class="detail-card">
+  <h2>Spec</h2>
+  <div class="detail-grid">
+    <div class="detail-row">
+      <div class="detail-label">Repo URL</div>
+      <div class="detail-value mono">{{.RepoURL}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Branch</div>
+      <div class="detail-value mono">{{if .Branch}}{{.Branch}}{{else}}main{{end}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Dockerfile</div>
+      <div class="detail-value mono">{{if .DockerfilePath}}{{.DockerfilePath}}{{else}}Dockerfile{{end}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Context path</div>
+      <div class="detail-value mono">{{if .ContextPath}}{{.ContextPath}}{{else}}(repo root){{end}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Port</div>
+      <div class="detail-value mono">{{.Port}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Replicas</div>
+      <div class="detail-value">{{if .Replicas}}{{.Replicas}}{{else}}1{{end}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Ingress host</div>
+      <div class="detail-value">
+        {{if .IngressHost}}
+          <a href="http://{{.IngressHost}}" target="_blank">{{.IngressHost}}</a>
+        {{else}}
+          <a href="http://{{.Name}}.{{.Domain}}" target="_blank">{{.Name}}.{{.Domain}}</a>
+        {{end}}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="danger-zone">
+  <p>Permanently delete this app and all associated resources.</p>
+  <button class="btn btn-danger"
+          hx-delete="/apps/{{.Name}}"
+          hx-confirm="Delete app {{.Name}}? This cannot be undone."
+          hx-on::after-request="window.location.href='/'">
+    Delete app
+  </button>
+</div>
+{{end}}

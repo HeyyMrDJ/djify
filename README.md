@@ -2,7 +2,7 @@
 
 A self-hosted, Kubernetes-native PaaS. Point it at a Git repo with a Dockerfile and djify builds the image in-cluster, pushes it to an in-cluster registry, and deploys it with a Deployment, Service, and Ingress — all driven by a single Kubernetes CRD.
 
-Think Coolify or Render, but running on your own k3s cluster.
+Think Coolify or Render, but running on your own cluster.
 
 ---
 
@@ -11,9 +11,9 @@ Think Coolify or Render, but running on your own k3s cluster.
 1. You create an `App` custom resource pointing at a Git repo
 2. The djify controller clones the repo, builds the image using BuildKit, and pushes it to the in-cluster registry
 3. A Deployment + Service + Ingress are created automatically
-4. The app is available at `http://<appname>.djify.local` via Traefik
+4. The app is available at `http://<appname>.<DJIFY_DOMAIN>` (default: `<appname>.djify.local`)
 
-Updating `spec` on the `App` CR triggers a rebuild and redeploy automatically.
+Updating `spec` on the `App` CR triggers a rebuild and redeploy automatically. The ingress hostname is kept in sync with the current `DJIFY_DOMAIN` — if the domain changes, all ingresses are updated within 30 seconds without a rebuild.
 
 ---
 
@@ -21,13 +21,13 @@ Updating `spec` on the `App` CR triggers a rebuild and redeploy automatically.
 
 - [k3s](https://k3s.io) or [kind](https://kind.sigs.k8s.io) cluster
 - `kubectl` configured to talk to your cluster
-- Nix (see below) — manages Python, uv, kubectl, kind, and all dev tooling
+- Nix (see below) — manages Python, uv, kubectl, kind, Go, and all dev tooling
 
 ---
 
 ## Development environment
 
-The recommended way to work on djify is via the Nix dev shell. It gives every contributor an identical, fully reproducible environment with all tools pinned — no manual Python installs, no PATH fiddling.
+The recommended way to work on djify is via the Nix dev shell. It gives every contributor an identical, fully reproducible environment with all tools pinned — no manual installs, no PATH fiddling.
 
 ### 1. Install Nix
 
@@ -37,132 +37,128 @@ Use the [Determinate Systems installer](https://determinate.systems/nix), which 
 curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
 ```
 
-Follow the prompts, then open a new terminal (or source your shell profile) to pick up the `nix` command.
+Follow the prompts, then open a new terminal to pick up the `nix` command.
 
 ### 2. Enter the dev shell
-
-From the repo root:
 
 ```bash
 nix develop
 ```
 
-Or run:
+Or, if you have [direnv](https://direnv.net) installed:
 
 ```bash
 direnv allow
 ```
-In case direnv is installed in the system
 
-This drops you into a shell with Python 3.12, uv, kubectl, and kind on `PATH`, plus all `djify-*` commands available directly. You'll see:
-
-```
-djify dev shell ready
-  Python : Python 3.12.x
-  uv     : uv x.x.x
-
-Run 'djify-help' to see available commands.
-```
+The dev shell activates automatically whenever you `cd` into the project.
 
 ### 3. Available commands
+
+Run `djify-help` to see all commands:
 
 ```
 djify dev shell — available commands
 
-  djify-kind-up          Create a kind cluster (djify)
-  djify-kind-down        Delete the kind cluster
-  djify-install-ingress  Install Ingress NGINX (for kind)
-  djify-sync             Install/sync Python dependencies (uv sync)
-  djify-install-crd      Apply the App CRD to the cluster
-  djify-install-infra    Apply namespace, RBAC, registry, buildkitd
-  djify-dev              Run the controller locally
-  djify-sample           Apply examples/sample-app.yaml
-  djify-delete-sample    Delete examples/sample-app.yaml
-  djify-uninstall        Remove all djify resources from the cluster
-  djify-docker-load      Build the Docker image and load it into the daemon
-  djify-clean            Remove .venv and __pycache__
+  djify-kind-up              Create a kind cluster named djify
+  djify-kind-down            Delete the djify kind cluster
+  djify-install-ingress      Install Ingress NGINX controller for kind
+  djify-sync                 Install/sync Python dependencies via uv
+  djify-install-crd          Apply the App CRD to the cluster
+  djify-install-infra        Apply namespace, RBAC, registry, and buildkitd
+  djify-dev                  Run the kopf controller locally against the cluster
+  djify-webui                Run the djify web UI locally on :8080
+  djify-sample               Apply the sample App CR
+  djify-delete-sample        Delete the sample App CR
+  djify-uninstall            Remove all djify resources from the cluster
+  djify-docker-load          Build the djify Docker image via Nix and load it
+  djify-kind-load-image      Load the docker image into the kind cluster
+  djify-clean                Remove .venv and Python cache files
 
 First-time setup (with kind):
   1. djify-kind-up && djify-install-ingress
   2. djify-sync
   3. djify-install-crd && djify-install-infra
-  4. Update config/k3s-registries.yaml and point to registry IP
-  5. djify-dev
-```
-
-### direnv (optional)
-
-If you have [direnv](https://direnv.net) installed, a `.envrc` is already included in the repo. Just run:
-
-```bash
-direnv allow
-```
-
-The dev shell will activate automatically whenever you `cd` into the project — no need to run `nix develop` manually.
-
-### Nix build targets
-
-```bash
-nix build              # build the Python virtualenv derivation
-nix build .#dockerImage  # build the controller Docker image as a Nix derivation
-djify-docker-load      # build .#dockerImage and load it into the local Docker daemon
+  4. djify-dev
 ```
 
 ---
 
 ## Setup
 
-### Local development with kind (optional)
+### Local development with kind
 
-If you don't have k3s running, you can use `kind` to create a 3-node cluster:
+Create a 3-node cluster (1 control-plane, 2 workers) with the in-cluster registry mirror pre-configured:
+
 ```bash
-make kind-up install-ingress
+djify-kind-up
+djify-install-ingress
 ```
 
-### 1. Configure the in-cluster registry
+> **Note:** `djify-kind-up` pre-creates the Podman `kind` network with the correct settings. If you already have a `kind` network from a previous install, it will be recreated automatically.
 
-k3s's containerd runtime needs to know to pull from the in-cluster registry over plain HTTP.
+### 1. Install Python dependencies
 
-Get the registry Service's ClusterIP (after step 3 below):
 ```bash
-kubectl get svc registry -n djify-system -o jsonpath='{.spec.clusterIP}'
+djify-sync
 ```
 
-Edit `config/k3s-registries.yaml` and replace `<REGISTRY_CLUSTER_IP>` with that value, then copy it to your k3s node and restart k3s:
-```bash
-sudo cp config/k3s-registries.yaml /etc/rancher/k3s/registries.yaml
-sudo systemctl restart k3s
-```
-
-> If your k3s node is remote, SSH in first before running the above commands.
-
-### 2. Install Python dependencies
+### 2. Install the CRD and in-cluster infrastructure
 
 ```bash
-make venv install-deps
-```
-
-### 3. Install the CRD and in-cluster infrastructure
-
-```bash
-make install-crd install-infra
+djify-install-crd
+djify-install-infra
 ```
 
 This applies:
 - `djify-system` namespace
 - RBAC (ClusterRole + binding for the controller)
-- In-cluster `registry:2` Deployment + Service + PVC
+- In-cluster `registry:2` Deployment + Service (ClusterIP pinned to `10.96.112.244`)
 - BuildKit (`moby/buildkit`) Deployment
 
-After this completes, run the registry ClusterIP command from step 1 and update `config/k3s-registries.yaml` if you haven't already.
+> **k3s users:** after this step, copy the registry mirror config to your node and restart k3s:
+> ```bash
+> sudo cp config/k3s-registries.yaml /etc/rancher/k3s/registries.yaml
+> sudo systemctl restart k3s
+> ```
+
+### 3. Configure your domain
+
+djify generates ingress hostnames as `<appname>.<DJIFY_DOMAIN>`. The default domain is `djify.local`.
+
+Set `DJIFY_DOMAIN` to your preferred domain before starting the controller:
+
+```bash
+export DJIFY_DOMAIN=djify.example.com
+```
+
+**DNS setup options:**
+
+- **Wildcard DNS (recommended):** Add a `*.djify.example.com` `A` record pointing to your node IP (or `127.0.0.1` for local kind). Any DNS provider that supports wildcards works — Cloudflare, Route53, etc.
+- **dnsmasq (macOS local dev):** `echo 'address=/djify.local/127.0.0.1' >> $(brew --prefix)/etc/dnsmasq.conf` and add `/etc/resolver/djify.local` pointing to `127.0.0.1`.
+- **`/etc/hosts` (per-app fallback):** Add `127.0.0.1 <appname>.djify.local` for each app.
 
 ### 4. Start the controller
 
 ```bash
-make dev
+djify-dev
 ```
 
 The controller runs locally using your kubeconfig and watches the `default` namespace for `App` CRs. Leave this running in a terminal.
+
+### 5. Start the web UI (optional)
+
+```bash
+djify-webui
+```
+
+Opens a dark-themed dashboard at `http://localhost:8080` where you can view all deployed apps, check build status, create new apps, and delete existing ones.
+
+The web UI picks up `DJIFY_DOMAIN` automatically. You can also pass it explicitly:
+
+```bash
+go run ./webui/ -domain djify.example.com
+```
 
 ---
 
@@ -171,12 +167,13 @@ The controller runs locally using your kubeconfig and watches the `default` name
 With the controller running, apply the sample App CR:
 
 ```bash
-make sample
+djify-sample
 ```
 
-This deploys [dockersamples/node-bulletin-board](https://github.com/dockersamples/node-bulletin-board) — a Node.js app with a Dockerfile at `bulletin-board-app/Dockerfile` listening on port 8080.
+This deploys [dockersamples/node-bulletin-board](https://github.com/dockersamples/node-bulletin-board) — a Node.js app listening on port 8080.
 
-Watch it progress through the build and deploy phases:
+Watch it build and deploy:
+
 ```bash
 kubectl get apps -w
 ```
@@ -188,19 +185,12 @@ sample-app   Deploying   registry.djify-system.svc.cluster.local:5000/sample-app
 sample-app   Ready       registry.djify-system.svc.cluster.local:5000/sample-app:...   45s
 ```
 
-Once `Ready`, add the hostname to your local `/etc/hosts` pointing at your k3s node IP:
-```
-192.168.x.x   sample-app.djify.local
-```
-
-Then open `http://sample-app.djify.local` in your browser, or test with curl:
-```bash
-curl -H "Host: sample-app.djify.local" http://<k3s-node-ip>
-```
+Once `Ready`, open `http://sample-app.<DJIFY_DOMAIN>` in your browser.
 
 To clean up:
+
 ```bash
-make delete-sample
+djify-delete-sample
 ```
 
 ---
@@ -221,6 +211,7 @@ spec:
 ```
 
 Apply it:
+
 ```bash
 kubectl apply -f my-app.yaml
 ```
@@ -235,49 +226,38 @@ kubectl apply -f my-app.yaml
 | `dockerfilePath` | no | `Dockerfile` | Path to the Dockerfile, relative to the build context root |
 | `contextPath` | no | — | Subdirectory to use as the build context root (see below) |
 | `replicas` | no | `1` | Number of pod replicas |
-| `ingressHost` | no | `<name>.djify.local` | Override the default ingress hostname |
+| `ingressHost` | no | `<name>.<DJIFY_DOMAIN>` | Override the computed ingress hostname |
 
 ### `contextPath` and `dockerfilePath`
-
-These two fields control how BuildKit clones and builds from your repo.
 
 **Dockerfile at repo root** (most common — omit both):
 ```yaml
 spec:
   repoUrl: https://github.com/you/repo
   port: 8080
-  # dockerfilePath defaults to "Dockerfile" at repo root
 ```
 
-**Dockerfile in a subdirectory, context = that subdirectory** (omit `contextPath`):
+**Dockerfile in a subdirectory** (context = that subdirectory):
 ```yaml
 spec:
   repoUrl: https://github.com/you/repo
-  dockerfilePath: app/Dockerfile   # context root becomes app/, filename becomes Dockerfile
+  dockerfilePath: app/Dockerfile
   port: 8080
 ```
 
-**Dockerfile in a subdirectory, context = repo root** (set `contextPath: ""`):
-```yaml
-spec:
-  repoUrl: https://github.com/you/repo
-  dockerfilePath: docker/Dockerfile  # relative to repo root
-  contextPath: ""                    # repo root is the build context
-  port: 8080
-```
-
-**Dockerfile and context both in a subdirectory** (set `contextPath` to that subdir):
+**Dockerfile and context both in a subdirectory:**
 ```yaml
 spec:
   repoUrl: https://github.com/you/monorepo
-  contextPath: services/api          # build context root
-  dockerfilePath: Dockerfile         # relative to contextPath
+  contextPath: services/api
+  dockerfilePath: Dockerfile
   port: 3000
 ```
 
 ### Trigger a rebuild
 
-Any change to `spec` triggers a rebuild and redeploy. To force a rebuild without changing app config, bump `replicas` and back:
+Any change to `spec` triggers a rebuild and redeploy. To force a rebuild without changing app config:
+
 ```bash
 kubectl patch app my-app --type=merge -p '{"spec":{"replicas":2}}'
 kubectl patch app my-app --type=merge -p '{"spec":{"replicas":1}}'
@@ -290,7 +270,7 @@ kubectl get apps
 kubectl describe app my-app
 ```
 
-The `status.message` field contains the error detail if the phase is `Failed`.
+The `status.message` field contains error detail if the phase is `Failed`.
 
 ### Delete an app
 
@@ -302,52 +282,50 @@ This removes the Deployment, Service, Ingress, and any lingering build Jobs.
 
 ---
 
+## Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DJIFY_DOMAIN` | `djify.local` | Base domain for generated ingress hostnames (`<appname>.<DJIFY_DOMAIN>`) |
+| `DJIFY_INGRESS_CLASS` | `traefik` | Ingress class to use — `traefik` for k3s, `nginx` for kind |
+
+Both are exported automatically by `djify-dev` and `djify-webui` when running inside the Nix dev shell.
+
+---
+
 ## Project layout
 
 ```
 ├── config/
-│   └── k3s-registries.yaml     # containerd registry mirror config for k3s node
+│   └── k3s-registries.yaml      # containerd registry mirror config for k3s
 ├── controller/
-│   ├── main.py                  # kopf entrypoint
-│   ├── requirements.txt
+│   ├── main.py                   # kopf entrypoint
 │   └── handlers/
-│       ├── app.py               # on_create / on_update / on_delete handlers
-│       ├── build.py             # BuildKit job orchestration
-│       └── deploy.py            # Deployment + Service + Ingress management
+│       ├── app.py                # on_create / on_update / on_delete / timer handlers
+│       ├── build.py              # BuildKit job orchestration
+│       └── deploy.py             # Deployment + Service + Ingress management
 ├── crds/
-│   └── apps.djify.io.yaml       # App CRD definition
+│   └── apps.djify.io.yaml        # App CRD definition
 ├── deploy/
 │   ├── namespace.yaml
 │   ├── rbac.yaml
-│   ├── registry.yaml            # in-cluster registry:2
-│   └── buildkitd.yaml           # moby/buildkit
+│   ├── registry.yaml             # in-cluster registry:2 (ClusterIP pinned)
+│   ├── buildkitd.yaml            # moby/buildkit
+│   └── webui.yaml                # web UI ServiceAccount + RBAC + Deployment + Ingress
+├── webui/
+│   ├── go.mod                    # Go module (djify/webui)
+│   ├── main.go                   # HTTP server, embedded assets, routes
+│   ├── handlers/                 # list, detail, create, delete handlers
+│   ├── k8s/                      # kubeconfig loader
+│   ├── templates/                # HTMX + server-side Go templates
+│   └── static/                   # CSS (dark theme)
 ├── examples/
 │   └── sample-app.yaml
-├── flake.nix                    # Nix flake: venv + Docker image outputs, imports dev shell
-├── flake.lock                   # pinned Nix input revisions (committed)
-├── shell.nix                    # Nix dev shell definition (imported by flake.nix)
-├── devx.nix                     # all djify-* dev scripts (writeShellApplication)
-├── default.nix                  # callPackage-compatible Docker image build
-├── pyproject.toml               # uv workspace root + dependency declarations
-├── uv.lock                      # pinned Python dependency tree (committed)
-└── .envrc                       # direnv entry point — runs `use flake` to activate the dev shell
+├── kind-config.yaml              # kind cluster config (port mappings, registry mirror)
+├── registry-configs/             # containerd mirror config for kind worker nodes
+├── flake.nix                     # Nix flake outputs
+├── devx.nix                      # all djify-* dev scripts
+├── pyproject.toml                # uv Python dependencies
+├── uv.lock                       # pinned Python dependency tree
+└── .envrc                        # direnv entry point
 ```
-
----
-
-## Makefile targets
-
-| Target | Description |
-|---|---|
-| `make kind-up` | Create a 3-node kind cluster (1 control, 2 workers) |
-| `make kind-down` | Delete the kind cluster |
-| `make install-ingress` | Install Ingress NGINX (for kind) |
-| `make venv` | Create `.venv` with Python 3.12 |
-| `make install-deps` | Install Python dependencies into `.venv` |
-| `make install-crd` | Apply the App CRD to the cluster |
-| `make install-infra` | Apply namespace, RBAC, registry, and buildkitd |
-| `make dev` | Run the controller locally using kubeconfig |
-| `make sample` | Apply `examples/sample-app.yaml` |
-| `make delete-sample` | Delete the sample App CR |
-| `make uninstall` | Remove all djify resources from the cluster |
-| `make clean` | Remove `.venv` and `__pycache__` |

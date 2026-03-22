@@ -1,0 +1,58 @@
+{{define "title"}}djify — Apps{{end}}
+
+{{define "content"}}
+<div class="page-header">
+  <h1>Apps</h1>
+  <a class="btn btn-primary" href="/apps/new">+ Deploy</a>
+</div>
+
+<div class="table-wrap"
+     hx-get="/apps/table"
+     hx-trigger="every 5s"
+     hx-swap="outerHTML">
+  {{template "app-table" .}}
+</div>
+{{end}}
+
+{{define "app-table"}}
+<div class="table-wrap">
+  {{if .}}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Phase</th>
+        <th>Image</th>
+        <th>Age</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .}}
+      <tr id="app-row-{{.Name}}">
+        <td class="app-name"><a href="/apps/{{.Name}}">{{.Name}}</a></td>
+        <td><span class="phase phase-{{.Phase}}">{{if .Phase}}{{.Phase}}{{else}}—{{end}}</span></td>
+        <td class="image-cell">{{if .Image}}{{.Image}}{{else}}—{{end}}</td>
+        <td class="age-cell">{{.Age}}</td>
+        <td class="actions-cell">
+          <a class="btn btn-secondary" href="/apps/{{.Name}}">View</a>
+          <button class="btn btn-danger"
+                  hx-delete="/apps/{{.Name}}"
+                  hx-target="#app-row-{{.Name}}"
+                  hx-swap="outerHTML"
+                  hx-confirm="Delete app {{.Name}}?">
+            Delete
+          </button>
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <div class="empty-state">
+    <p>No apps deployed yet.</p>
+    <a class="btn btn-primary" href="/apps/new">Deploy your first app</a>
+  </div>
+  {{end}}
+</div>
+{{end}}

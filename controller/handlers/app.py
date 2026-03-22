@@ -16,6 +16,7 @@ Handler flow:
 
 import datetime
 import logging
+import os
 
 import kopf
 from kubernetes import client as k8s_client, config as k8s_config
@@ -58,8 +59,9 @@ def _patch_status(namespace: str, name: str, patch: dict) -> None:
 
 
 def _ingress_host(app_name: str, spec: dict) -> str:
-    """Return the ingress hostname — spec.ingressHost or <appname>.djify.local."""
-    return spec.get("ingressHost") or f"{app_name}.djify.local"
+    """Return the ingress hostname — spec.ingressHost or <appname>.<DJIFY_DOMAIN>."""
+    domain = os.environ.get("DJIFY_DOMAIN", "djify.local")
+    return spec.get("ingressHost") or f"{app_name}.{domain}"
 
 
 # ── create handler ─────────────────────────────────────────────────────────────
@@ -81,6 +83,51 @@ async def on_update(spec, name, namespace, logger, **kwargs):
     handler, preventing the infinite create→status-patch→update→build loop.
     """
     await _reconcile(spec, name, namespace, logger)
+
+
+# ── ingress drift correction ──────────────────────────────────────────────────
+
+@kopf.on.timer("djify.io", "v1alpha1", "apps", interval=30.0, idle=10.0)
+async def reconcile_ingress(spec, name, namespace, logger, **kwargs):
+    """Periodically ensure the Ingress hostname matches the current DJIFY_DOMAIN.
+
+    This corrects drift when DJIFY_DOMAIN changes without touching app specs,
+    without triggering a full rebuild.
+    """
+    net_api = k8s_client.NetworkingV1Api()
+    expected_host = _ingress_host(name, spec)
+
+    try:
+        ingress = net_api.read_namespaced_ingress(name=name, namespace=namespace)
+    except k8s_client.ApiException as exc:
+        if exc.status == 404:
+            return  # ingress not created yet — on_create will handle it
+        raise
+
+    rules = (ingress.spec.rules or [])
+    current_host = rules[0].host if rules else None
+
+    if current_host == expected_host:
+        return  # nothing to do
+
+    logger.info(
+        "Ingress host drift detected for %s: %r → %r",
+        name, current_host, expected_host,
+    )
+
+    from handlers.deploy import _ingress_manifest, FIELD_MANAGER
+    body = _ingress_manifest(name, namespace, expected_host)
+    net_api.patch_namespaced_ingress(
+        name=name,
+        namespace=namespace,
+        body=body,
+        field_manager=FIELD_MANAGER,
+    )
+
+    _patch_status(namespace, name, {
+        "message": f"Available at http://{expected_host}",
+    })
+    logger.info("Ingress host updated to %r for %s/%s", expected_host, namespace, name)
 
 
 # ── shared reconcile logic ────────────────────────────────────────────────────
