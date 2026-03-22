@@ -90,6 +90,7 @@ let
     runtimeInputs = [ pkgs.uv ];
     text = ''
       echo "Starting controller locally (namespace=default)..."
+      export DJIFY_INGRESS_CLASS=nginx
       uv run kopf run controller/main.py \
         --namespace=default \
         --dev \

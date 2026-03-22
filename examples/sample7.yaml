@@ -4,10 +4,9 @@
 apiVersion: djify.io/v1alpha1
 kind: App
 metadata:
-  name: sample-app6
+  name: sample-app7
   namespace: default
 spec:
-  repoUrl: https://github.com/captainWaheed/docker-beginner
   repoUrl: https://github.com/GoogleCloudPlatform/golang-samples
   branch: main
   dockerfilePath: Dockerfile
