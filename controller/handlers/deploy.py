@@ -5,11 +5,13 @@ Responsibilities:
   - Create or update a Deployment, Service, and Ingress for each App CR
   - All child resources are created in the same namespace as the App CR
   - Resources are labelled with the App name so they can be cleaned up
-  - The Ingress uses Traefik (k3s default) and the host pattern
-    <appname>.djify.local (or spec.ingressHost if provided)
+  - The Ingress class defaults to "traefik" (k3s) but can be overridden via
+    the DJIFY_INGRESS_CLASS environment variable (e.g. "nginx" for kind)
+  - Host pattern: <appname>.djify.local (or spec.ingressHost if provided)
 """
 
 import logging
+import os
 
 from kubernetes import client as k8s_client
 from kubernetes.client.rest import ApiException
@@ -18,6 +20,10 @@ log = logging.getLogger(__name__)
 
 # Field manager name used for patch calls
 FIELD_MANAGER = "djify-controller"
+
+# Ingress class — "traefik" for k3s, "nginx" for kind/ingress-nginx.
+# Override via DJIFY_INGRESS_CLASS environment variable.
+INGRESS_CLASS = os.environ.get("DJIFY_INGRESS_CLASS", "traefik")
 
 
 def _labels(app_name: str) -> dict:
@@ -90,6 +96,11 @@ def _service_manifest(app_name: str, namespace: str, port: int) -> dict:
 
 def _ingress_manifest(app_name: str, namespace: str, host: str) -> dict:
     labels = _labels(app_name)
+    annotations = (
+        {"traefik.ingress.kubernetes.io/router.entrypoints": "web"}
+        if INGRESS_CLASS == "traefik"
+        else {}
+    )
     return {
         "apiVersion": "networking.k8s.io/v1",
         "kind": "Ingress",
@@ -97,12 +108,10 @@ def _ingress_manifest(app_name: str, namespace: str, host: str) -> dict:
             "name": app_name,
             "namespace": namespace,
             "labels": labels,
-            "annotations": {
-                "traefik.ingress.kubernetes.io/router.entrypoints": "web",
-            },
+            "annotations": annotations,
         },
         "spec": {
-            "ingressClassName": "traefik",
+            "ingressClassName": INGRESS_CLASS,
             "rules": [
                 {
                     "host": host,
