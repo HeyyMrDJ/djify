@@ -1,0 +1,98 @@
+---
+# djify Web UI — in-cluster deployment (future use)
+# To deploy: kubectl apply -f deploy/webui.yaml
+# Access at: http://ui.djify.local (add to /etc/hosts)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: djify-webui
+  namespace: djify-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: djify-webui
+rules:
+- apiGroups: ["djify.io"]
+  resources: ["apps"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: djify-webui
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: djify-webui
+subjects:
+- kind: ServiceAccount
+  name: djify-webui
+  namespace: djify-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: djify-webui
+  namespace: djify-system
+  labels:
+    app.kubernetes.io/name: djify-webui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: djify-webui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: djify-webui
+    spec:
+      serviceAccountName: djify-webui
+      containers:
+      - name: webui
+        image: djify-webui:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DJIFY_NAMESPACE
+          value: "default"
+        args: ["-namespace", "default"]
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: djify-webui
+  namespace: djify-system
+spec:
+  selector:
+    app.kubernetes.io/name: djify-webui
+  ports:
+  - port: 80
+    targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: djify-webui
+  namespace: djify-system
+spec:
+  # Set ingressClassName to match your cluster: "traefik" (k3s) or "nginx" (kind)
+  ingressClassName: nginx
+  rules:
+  - host: ui.djify.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: djify-webui
+            port:
+              number: 80

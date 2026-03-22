@@ -165,6 +165,16 @@ let
     meta.description = "Remove .venv and Python cache files";
   };
 
+  djify-webui = pkgs.writeShellApplication {
+    name = "djify-webui";
+    runtimeInputs = [ pkgs.go ];
+    text = ''
+      echo "Starting djify web UI on http://localhost:8080 ..."
+      go run ./webui/
+    '';
+    meta.description = "Run the djify web UI locally on :8080";
+  };
+
   # All scripts except djify-help so it can iterate over them to build its output
   scripts = [
     djify-kind-up
@@ -174,6 +184,7 @@ let
     djify-install-crd
     djify-install-infra
     djify-dev
+    djify-webui
     djify-sample
     djify-delete-sample
     djify-uninstall
