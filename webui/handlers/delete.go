@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"html/template"
 	"net/http"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,7 +10,7 @@ import (
 
 // DeleteApp handles DELETE /apps/{name} — deletes the App CR and returns an
 // empty 200 so HTMX removes the row from the DOM.
-func DeleteApp(tmpl *template.Template, client dynamic.Interface, namespace string) http.HandlerFunc {
+func DeleteApp(client dynamic.Interface, namespace string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		if name == "" {

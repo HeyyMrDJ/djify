@@ -10,8 +10,20 @@ let
   };
   djify-kind-up = pkgs.writeShellApplication {
     name = "djify-kind-up";
-    runtimeInputs = [ pkgs.kind ];
+    runtimeInputs = [ pkgs.kind pkgs.podman ];
     text = ''
+      # Recreate the kind Podman network to ensure a clean state.
+      if podman network inspect kind >/dev/null 2>&1; then
+        podman network rm kind --force
+      fi
+      podman network create kind \
+        --subnet 10.89.0.0/24 \
+        --gateway 10.89.0.1 \
+        --ipv6 \
+        --subnet fc00:f853:ccd:e793::/64 \
+        --gateway fc00:f853:ccd:e793::1
+
+      export KIND_EXPERIMENTAL_PROVIDER=podman
       kind create cluster --config kind-config.yaml --name djify
     '';
     meta.description = "Create a kind cluster named djify";
@@ -91,6 +103,7 @@ let
     text = ''
       echo "Starting controller locally (namespace=default)..."
       export DJIFY_INGRESS_CLASS=nginx
+      export DJIFY_DOMAIN=djify.local
       uv run kopf run controller/main.py \
         --namespace=default \
         --dev \
@@ -170,7 +183,7 @@ let
     runtimeInputs = [ pkgs.go ];
     text = ''
       echo "Starting djify web UI on http://localhost:8080 ..."
-      go run ./webui/
+      go run ./webui/ -domain "''${DJIFY_DOMAIN:-djify.local}"
     '';
     meta.description = "Run the djify web UI locally on :8080";
   };

@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"context"
-	"html/template"
+	"io/fs"
 	"net/http"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -11,7 +11,7 @@ import (
 )
 
 // GetApp handles GET /apps/{name} — renders the detail page.
-func GetApp(tmpl *template.Template, client dynamic.Interface, namespace string) http.HandlerFunc {
+func GetApp(assets fs.FS, client dynamic.Interface, namespace, domain string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		if name == "" {
@@ -45,9 +45,11 @@ func GetApp(tmpl *template.Template, client dynamic.Interface, namespace string)
 			Port:           int64Field(obj, "spec", "port"),
 			Replicas:       int64Field(obj, "spec", "replicas"),
 			IngressHost:    strField(obj, "spec", "ingressHost"),
+			Domain:         domain,
 		}
 
-		if err := tmpl.ExecuteTemplate(w, "detail.html", detail); err != nil {
+		tmpl := mustParse(assets, "detail.html")
+		if err := tmpl.ExecuteTemplate(w, "base", detail); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}

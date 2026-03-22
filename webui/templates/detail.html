@@ -1,5 +1,3 @@
-{{template "base" .}}
-
 {{define "title"}}{{.Name}} — djify{{end}}
 
 {{define "content"}}
@@ -68,7 +66,7 @@
         {{if .IngressHost}}
           <a href="http://{{.IngressHost}}" target="_blank">{{.IngressHost}}</a>
         {{else}}
-          <a href="http://{{.Name}}.djify.local" target="_blank">{{.Name}}.djify.local</a>
+          <a href="http://{{.Name}}.{{.Domain}}" target="_blank">{{.Name}}.{{.Domain}}</a>
         {{end}}
       </div>
     </div>

@@ -1,5 +1,3 @@
-{{template "base" .}}
-
 {{define "title"}}djify — Apps{{end}}
 
 {{define "content"}}
@@ -9,7 +7,7 @@
 </div>
 
 <div class="table-wrap"
-     hx-get="/"
+     hx-get="/apps/table"
      hx-trigger="every 5s"
      hx-swap="outerHTML">
   {{template "app-table" .}}

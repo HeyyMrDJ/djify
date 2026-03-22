@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"time"
 
@@ -43,6 +44,7 @@ type AppDetail struct {
 	Port           int64
 	Replicas       int64
 	IngressHost    string
+	Domain         string
 }
 
 func strField(obj map[string]interface{}, keys ...string) string {
@@ -112,28 +114,61 @@ func formatPlural(n int, unit string) string {
 	return fmt.Sprintf("%d %ss", n, unit)
 }
 
-// ListApps handles GET / — renders the app list.
-func ListApps(tmpl *template.Template, client dynamic.Interface, namespace string) http.HandlerFunc {
+// mustParse parses base.html + the named page file from the embedded FS.
+// Each call produces an isolated template set with no shared {{define}} blocks.
+func mustParse(assets fs.FS, page string) *template.Template {
+	tmpl, err := template.ParseFS(assets, "templates/base.html", "templates/"+page)
+	if err != nil {
+		panic("failed to parse templates: " + err.Error())
+	}
+	return tmpl
+}
+
+// listApps fetches the current app list from the cluster.
+func listApps(client dynamic.Interface, namespace string) ([]AppSummary, error) {
+	list, err := client.Resource(appGVR).Namespace(namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	var apps []AppSummary
+	for _, item := range list.Items {
+		obj := item.Object
+		apps = append(apps, AppSummary{
+			Name:      strField(obj, "metadata", "name"),
+			Namespace: strField(obj, "metadata", "namespace"),
+			Phase:     strField(obj, "status", "phase"),
+			Image:     strField(obj, "status", "image"),
+			Age:       humanAge(item.GetCreationTimestamp()),
+		})
+	}
+	return apps, nil
+}
+
+// ListApps handles GET / — renders the full page app list.
+func ListApps(assets fs.FS, client dynamic.Interface, namespace string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		list, err := client.Resource(appGVR).Namespace(namespace).List(context.Background(), metav1.ListOptions{})
+		apps, err := listApps(client, namespace)
 		if err != nil {
 			http.Error(w, "failed to list apps: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		var apps []AppSummary
-		for _, item := range list.Items {
-			obj := item.Object
-			apps = append(apps, AppSummary{
-				Name:      strField(obj, "metadata", "name"),
-				Namespace: strField(obj, "metadata", "namespace"),
-				Phase:     strField(obj, "status", "phase"),
-				Image:     strField(obj, "status", "image"),
-				Age:       humanAge(item.GetCreationTimestamp()),
-			})
+		tmpl := mustParse(assets, "index.html")
+		if err := tmpl.ExecuteTemplate(w, "base", apps); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
+	}
+}
 
-		if err := tmpl.ExecuteTemplate(w, "index.html", apps); err != nil {
+// ListAppsTable handles GET /apps/table — renders only the table fragment for HTMX polling.
+func ListAppsTable(assets fs.FS, client dynamic.Interface, namespace string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		apps, err := listApps(client, namespace)
+		if err != nil {
+			http.Error(w, "failed to list apps: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		tmpl := mustParse(assets, "index.html")
+		if err := tmpl.ExecuteTemplate(w, "app-table", apps); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}

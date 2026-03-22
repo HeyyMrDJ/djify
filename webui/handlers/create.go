@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"html/template"
+	"io/fs"
 	"net/http"
 	"strconv"
 
@@ -13,10 +13,11 @@ import (
 )
 
 // CreateApp handles GET /apps/new (form) and POST /apps (submit).
-func CreateApp(tmpl *template.Template, client dynamic.Interface, namespace string) http.HandlerFunc {
+func CreateApp(assets fs.FS, client dynamic.Interface, namespace string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
-			if err := tmpl.ExecuteTemplate(w, "create.html", nil); err != nil {
+			tmpl := mustParse(assets, "create.html")
+			if err := tmpl.ExecuteTemplate(w, "base", nil); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 			return
