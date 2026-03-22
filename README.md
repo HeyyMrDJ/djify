@@ -2,7 +2,9 @@
 
 A self-hosted, Kubernetes-native PaaS. Point it at a Git repo with a Dockerfile and djify builds the image in-cluster, pushes it to an in-cluster registry, and deploys it with a Deployment, Service, and Ingress — all driven by a single Kubernetes CRD.
 
-Think Coolify or Render, but running on your own cluster.
+Think Vercel, Netlify, coolify, but running on your own kubernetes cluster. 
+
+Kubernetes is the state, there is no database outside of the kubernetes etcd (or whatever your cluster is using). And because this is just kubernetes, you can deploy via kubectl, API (curl, or kubernetes language specific SDKs), GitOps (eg. Argo CD), or the included webui. 
 
 ---
 
@@ -16,7 +18,12 @@ Think Coolify or Render, but running on your own cluster.
 Updating `spec` on the `App` CR triggers a rebuild and redeploy automatically. The ingress hostname is kept in sync with the current `DJIFY_DOMAIN` — if the domain changes, all ingresses are updated within 30 seconds without a rebuild.
 
 ---
+## Screenshots
+<img width="1872" height="507" alt="image" src="https://github.com/user-attachments/assets/afebaaa5-1f0b-4912-95a9-6da803e153e3" />
+<img width="1301" height="730" alt="image" src="https://github.com/user-attachments/assets/b42be7d9-8261-4675-8e57-973680187de4" />
 
+
+---
 ## Prerequisites
 
 - [k3s](https://k3s.io) or [kind](https://kind.sigs.k8s.io) cluster
